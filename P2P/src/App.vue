@@ -1,18 +1,19 @@
 <script setup>
-// Séquence d’établissement et de fermeture de la connexion P2P :
+// Séquence d’établissement et de fermeture des connexions P2P :
 // 1. Vue monte le composant et crée un objet PeerJS.
-// 2. PeerJS demande un identifiant unique au serveur par HTTPS.
-// 3. PeerJS ouvre ensuite une WebSocket de signalisation avec cet identifiant.
-// 4. Un utilisateur communique son identifiant à l’autre utilisateur.
-// 5. L’autre utilisateur saisit cet identifiant et clique sur « Se connecter ».
-// 6. peer.connect() lance la négociation WebRTC via le serveur de signalisation.
-// 7. Le navigateur distant reçoit connection et installe les écouteurs du canal.
-// 8. L’événement open confirme que le DataChannel direct est prêt.
-// 9. send() envoie le texte ; l’événement data le reçoit chez l’autre pair.
-// 10. close() ferme le canal lors d’une déconnexion ou d’un rechargement.
-// 11. Les événements close/error mettent enfin l’interface à jour.
+// 2. PeerJS reçoit un identifiant et ouvre la WebSocket de signalisation.
+// 3. L’utilisateur partage son identifiant avec plusieurs autres navigateurs.
+// 4. Chaque identifiant saisi crée son propre DataConnection WebRTC.
+// 5. Chaque connexion entrante ou sortante est rangée dans la Map connections.
+// 6. L’événement open marque uniquement le canal concerné comme connecté.
+// 7. Les étapes 3 à 6 peuvent être répétées pour ajouter plusieurs pairs.
+// 8. Envoyer à tous parcourt chaque canal ouvert et appelle send() sur chacun.
+// 9. data reçoit le texte avec l’identifiant du pair qui l’a envoyé.
+// 10. Un pair peut être déconnecté seul, ou tous les canaux peuvent être fermés.
+// 11. close/error retire uniquement la connexion concernée de la Map.
+// 12. Au rechargement, tous les canaux sont fermés puis le Peer est détruit.
 
-import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from "vue";
+import { computed, markRaw, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import Peer from "peerjs";
 
 // État réactif affiché par le template Vue.
@@ -22,128 +23,209 @@ const message = ref("");
 const messages = ref([]);
 const status = ref("Connexion au serveur de signalisation…");
 const statusType = ref("waiting");
+const peerReady = ref(false);
 
-// shallowRef réagit au remplacement de la connexion sans tenter de rendre
-// tout l’objet PeerJS réactif. PeerJS conserve ainsi le contrôle de son objet.
-const activeConnection = shallowRef(null);
-const isConnected = ref(false);
+// La Map associe chaque identifiant distant à sa propre DataConnection.
+// markRaw(), utilisé plus bas, empêche Vue de transformer les objets PeerJS.
+const connections = reactive(new Map());
 
 let peer = null;
 
-const canDisconnect = computed(() => activeConnection.value !== null);
+const connectionList = computed(() => Array.from(connections.values()));
+const connectedConnections = computed(() =>
+  connectionList.value.filter((entry) => entry.state === "connected"),
+);
+const connectedCount = computed(() => connectedConnections.value.length);
+const isConnected = computed(() => connectedCount.value > 0);
+const canDisconnectAll = computed(() => connections.size > 0);
 
 function errorText(error) {
   return error?.message || error?.type || String(error);
 }
 
-// Cette fonction centralise le cycle de vie d’un canal de données, qu’il soit
-// entrant ou sortant. L’exemple garde volontairement une seule connexion active.
-function addConnection(connection) {
-  // [BP-05-ATTACH] Inspecter connection.peer et activeConnection.value.
-  if (activeConnection.value && activeConnection.value !== connection) {
-    activeConnection.value.close();
+function connectedLabel(count = connectedCount.value) {
+  return `${count} pair${count > 1 ? "s" : ""} connecté${count > 1 ? "s" : ""}`;
+}
+
+function updateStatus(prefix = "") {
+  if (connectedCount.value > 0) {
+    status.value = prefix ? `${prefix} — ${connectedLabel()}` : connectedLabel();
+    statusType.value = "connected";
+    return;
   }
 
-  activeConnection.value = connection;
-  isConnected.value = false;
-  status.value = `Connexion à ${connection.peer}…`;
+  status.value = prefix || "Prêt — partagez votre identifiant";
+  statusType.value = prefix ? "disconnected" : "ready";
+}
+
+function removeConnection(connection) {
+  const current = connections.get(connection.peer);
+  if (current?.connection !== connection) return false;
+  connections.delete(connection.peer);
+  return true;
+}
+
+// Si deux navigateurs cliquent simultanément, cette règle conserve le même
+// canal des deux côtés au lieu de fermer accidentellement les deux doublons.
+function preferredDirection(peerId) {
+  if (!peer?.id) return "incoming";
+  return peer.id < peerId ? "outgoing" : "incoming";
+}
+
+// Cette fonction installe le cycle de vie d’un canal entrant ou sortant.
+function addConnection(connection, direction) {
+  const peerId = connection.peer;
+  const existing = connections.get(peerId);
+
+  // [BP-05-ATTACH] Inspecter peerId, direction, existing et connections.
+  if (existing?.connection === connection) return;
+
+  if (existing) {
+    const preferred = preferredDirection(peerId);
+    const keepExisting = existing.direction === preferred || direction !== preferred;
+
+    if (keepExisting) {
+      console.warn("Connexion en double ignorée pour :", peerId);
+      connection.close();
+      return;
+    }
+
+    connections.delete(peerId);
+    existing.connection.close();
+  }
+
+  connections.set(peerId, {
+    peerId,
+    connection: markRaw(connection),
+    direction,
+    state: connection.open ? "connected" : "connecting",
+  });
+
+  const previousCount = connectedCount.value;
+  status.value = previousCount
+    ? `Connexion avec ${peerId}… — ${connectedLabel(previousCount)}`
+    : `Connexion avec ${peerId}…`;
   statusType.value = "waiting";
 
-  // open signifie que la négociation WebRTC est terminée et que le DataChannel
-  // peut réellement transporter des messages.
+  // open signifie que ce DataChannel précis peut transporter des messages.
   connection.on("open", () => {
-    // [BP-06-OPEN] Inspecter connection.open, connection.peer et activeConnection.value.
-    if (activeConnection.value !== connection) return;
-    isConnected.value = true;
-    status.value = `Connecté à ${connection.peer}`;
-    statusType.value = "connected";
-    console.log("Connexion P2P établie avec :", connection.peer);
+    const current = connections.get(peerId);
+    // [BP-06-OPEN] Inspecter current, connection.open et connectedCount.value.
+    if (current?.connection !== connection) return;
+    current.state = "connected";
+    updateStatus();
+    console.log("Connexion P2P établie avec :", peerId);
   });
 
-  // data transporte ici le texte directement par le canal WebRTC.
   connection.on("data", (data) => {
-    // [BP-08-RECEIVE] Inspecter data avant son ajout dans messages.value.
-    console.log("Reçu :", data);
-    messages.value.push({ from: connection.peer, text: String(data) });
+    const current = connections.get(peerId);
+    if (current?.connection !== connection) return;
+    // [BP-08-RECEIVE] Inspecter peerId, data et messages.value.
+    console.log(`Reçu de ${peerId} :`, data);
+    messages.value.push({ from: peerId, text: String(data) });
   });
 
-  // close est déclenché après une fermeture locale ou distante. Une coupure
-  // réseau brutale peut prendre plus de temps à être détectée par WebRTC.
   connection.on("close", () => {
-    // [BP-10-CLOSE] Inspecter connection.peer puis avancer pas à pas.
-    console.log("Connexion P2P fermée :", connection.peer);
-    if (activeConnection.value !== connection) return;
-    activeConnection.value = null;
-    isConnected.value = false;
-    status.value = `${connection.peer} s’est déconnecté`;
-    statusType.value = "disconnected";
+    // [BP-10-CLOSE] Vérifier que seul peerId est retiré de connections.
+    if (!removeConnection(connection)) return;
+    console.log("Connexion P2P fermée :", peerId);
+    updateStatus(`${peerId} s’est déconnecté`);
   });
 
   connection.on("error", (error) => {
-    // [BP-13-CONNECTION-ERROR] Inspecter error.name, error.message et connection.peer.
-    console.error("Erreur de connexion P2P :", error);
-    if (activeConnection.value !== connection) return;
-    isConnected.value = false;
-    status.value = `Erreur de connexion : ${errorText(error)}`;
-    statusType.value = "disconnected";
+    // [BP-13-CONNECTION-ERROR] Inspecter peerId, error et connections.
+    if (!removeConnection(connection)) return;
+    connection.close();
+    console.error(`Erreur de connexion P2P avec ${peerId} :`, error);
+    updateStatus(`Erreur avec ${peerId} : ${errorText(error)}`);
   });
+
+  if (connection.open) updateStatus();
 }
 
-// Connexion sortante : l’utilisateur fournit l’identifiant de l’autre pair.
+// Connexion sortante : chaque nouvel identifiant ajoute un pair à la Map.
 function connect() {
   const id = otherId.value.trim();
-  // [BP-03-CONNECT-OUT] Inspecter otherId.value, id et peer.open.
-  if (!peer?.open || !id) return;
+  // [BP-03-CONNECT-OUT] Inspecter id, peerReady.value et connections.
+  if (!peerReady.value || !id) return;
 
   if (id === myId.value) {
-    status.value = "Saisissez l’identifiant de l’autre navigateur";
+    status.value = "Saisissez l’identifiant d’un autre navigateur";
     statusType.value = "disconnected";
     return;
   }
 
-  console.log("Connexion à :", id);
+  if (connections.has(id)) {
+    status.value = `Une connexion avec ${id} existe déjà`;
+    statusType.value = "waiting";
+    return;
+  }
 
-  // peer.connect lance la signalisation puis la négociation WebRTC.
-  addConnection(peer.connect(id, { reliable: true }));
+  console.log("Connexion à :", id);
+  const connection = peer.connect(id, { reliable: true });
+  addConnection(connection, "outgoing");
+  otherId.value = "";
 }
 
+// Un message de groupe est ici une boucle sur plusieurs canaux individuels.
+// Il ne s’agit pas d’un DataChannel unique partagé entre tous les pairs.
 function sendMessage() {
   const text = message.value.trim();
-  if (!isConnected.value || !text) return;
+  const targets = connectedConnections.value.map((entry) => entry.connection);
+  if (!text || targets.length === 0) return;
 
-  // [BP-07-SEND] Inspecter text, isConnected.value et activeConnection.value.open.
-  activeConnection.value.send(text);
-  console.log("Envoyé :", text);
-  messages.value.push({ from: "Vous", text });
-  message.value = "";
+  // [BP-07-SEND] Inspecter text, targets et targets.length.
+  let sentCount = 0;
+  for (const connection of targets) {
+    if (!connection.open) continue;
+    connection.send(text);
+    sentCount += 1;
+    console.log(`Envoyé à ${connection.peer} :`, text);
+  }
+
+  if (sentCount > 0) {
+    messages.value.push({ from: `Vous → tous (${sentCount})`, text });
+    message.value = "";
+  }
 }
 
-// Ferme uniquement le canal courant. Le Peer et son identifiant restent prêts
-// pour recevoir une nouvelle connexion.
-function disconnect() {
-  const connection = activeConnection.value;
-  if (!connection) return;
+// Retire l’entrée avant close(), car une connexion encore en négociation
+// n’émet pas toujours l’événement close de PeerJS.
+function disconnectPeer(peerId, announce = true) {
+  const entry = connections.get(peerId);
+  if (!entry) return;
 
-  activeConnection.value = null;
-  isConnected.value = false;
+  // [BP-09-DISCONNECT] Inspecter peerId, entry et connections avant delete().
+  connections.delete(peerId);
+  entry.connection.close();
+  console.log("Déconnecté de :", peerId);
 
-  // [BP-09-DISCONNECT] Inspecter connection puis avancer sur close().
-  connection.close();
-  status.value = `Déconnecté de ${connection.peer}`;
+  if (announce) updateStatus(`Déconnecté de ${peerId}`);
+}
+
+function disconnectAll() {
+  const peerIds = Array.from(connections.keys());
+  if (peerIds.length === 0) return;
+
+  // [BP-15-DISCONNECT-ALL] Inspecter peerIds avant de fermer chaque canal.
+  for (const peerId of peerIds) disconnectPeer(peerId, false);
+  status.value = "Toutes les connexions sont fermées";
   statusType.value = "disconnected";
-  console.log("Déconnecté de :", connection.peer);
 }
 
-// Utilisé lors d’un rechargement, d’une fermeture d’onglet ou du démontage du
-// composant. destroy ferme aussi la WebSocket vers le serveur de signalisation.
+// Lors d’un reload, la Map est vidée avant les fermetures afin que les callbacks
+// tardifs d’un canal ne puissent pas supprimer une nouvelle connexion.
 function closeEverything() {
-  // [BP-11-UNLOAD] Inspecter activeConnection.value et peer, puis reprendre vite
-  // l’exécution pour ne pas retarder artificiellement la fermeture de la page.
-  activeConnection.value?.close();
+  const entries = Array.from(connections.values());
+  // [BP-11-UNLOAD] Inspecter entries, connections.size et peer.
+  connections.clear();
+  for (const entry of entries) entry.connection.close();
   peer?.destroy();
+  peerReady.value = false;
 }
 
 onMounted(() => {
+  // Configuration Blackthorn disponible, mais inactive dans la ligne actuelle.
   const btwPeer = {
     host: "p2p.blackthornwinter.com",
     port: 443,
@@ -153,49 +235,41 @@ onMounted(() => {
     debug: 2,
   };
 
-  // [BP-01-CREATION] Inspecter les options avant de construire le Peer.
-  // peer = new Peer(undefined, btwPeer); // won't work on web deployment
-  peer = new Peer(); // utliser le serveur de signalisation par défaut de PeerJS pour les tests locaux
+  // [BP-01-CREATION] Comparer les deux configurations avant de créer le Peer.
+  // peer = new Peer(undefined, btwPeer); // à réactiver lorsque cette origine est autorisée
+  peer = new Peer(); // choix actuel : serveur public par défaut de PeerJS
 
-  // PeerJS a d’abord obtenu l’identifiant par HTTPS, puis a ouvert la WebSocket.
   peer.on("open", (id) => {
     // [BP-02-ID] Inspecter id, peer.id et peer.open.
+    peerReady.value = true;
     myId.value = id;
-    status.value = "Prêt — partagez votre identifiant";
-    statusType.value = "ready";
+    updateStatus();
     console.log("Votre identifiant PeerJS :", id);
   });
 
-  // Ce callback est l’équivalent entrant de peer.connect().
   peer.on("connection", (connection) => {
-    // [BP-04-CONNECT-IN] Inspecter connection.peer et connection.open.
+    // [BP-04-CONNECT-IN] Inspecter connection.peer et connections.size.
     console.log("Connexion entrante de :", connection.peer);
-    addConnection(connection);
+    addConnection(connection, "incoming");
   });
 
-  // Attention : disconnected concerne la signalisation. Un DataChannel déjà
-  // ouvert peut continuer à fonctionner sans le serveur de signalisation.
+  // La perte de signalisation ne ferme pas les DataChannels déjà ouverts.
   peer.on("disconnected", () => {
-    // [BP-12-SIGNAL-LOST] Inspecter peer.disconnected et isConnected.value.
+    // [BP-12-SIGNAL-LOST] Inspecter peer.disconnected et connectedCount.value.
+    peerReady.value = false;
     console.warn("Connexion au serveur de signalisation perdue");
-    if (!isConnected.value) {
-      status.value = "Connexion au serveur de signalisation perdue";
-      statusType.value = "disconnected";
-    }
+    updateStatus("Connexion au serveur de signalisation perdue");
   });
 
   peer.on("error", (error) => {
-    // [BP-14-PEER-ERROR] Inspecter error.type et error.message.
+    // [BP-14-PEER-ERROR] Inspecter error.type, error.message et connections.
     console.error("Erreur PeerJS :", error);
-    status.value = `Erreur : ${errorText(error)}`;
-    statusType.value = "disconnected";
+    updateStatus(`Erreur : ${errorText(error)}`);
   });
 
-  // beforeunload couvre le rechargement et la fermeture normale de l’onglet.
   window.addEventListener("beforeunload", closeEverything);
 });
 
-// Ce nettoyage est également exécuté si Vue démonte le composant.
 onBeforeUnmount(() => {
   window.removeEventListener("beforeunload", closeEverything);
   closeEverything();
@@ -219,20 +293,49 @@ onBeforeUnmount(() => {
     <form class="row" @submit.prevent="connect">
       <label for="other-id">Identifiant de l’autre personne</label>
       <input id="other-id" v-model="otherId" autocomplete="off" placeholder="Collez son identifiant" />
-      <button type="submit" :disabled="!peer?.open || !otherId.trim()">Se connecter</button>
-      <button type="button" class="secondary" :disabled="!canDisconnect" @click="disconnect">Se déconnecter</button>
+      <button type="submit" :disabled="!peerReady || !otherId.trim()">Ajouter ce pair</button>
     </form>
 
+    <section>
+      <div class="section-heading">
+        <h2>Connexions ({{ connectionList.length }})</h2>
+        <button type="button" class="secondary small" :disabled="!canDisconnectAll" @click="disconnectAll">
+          Tout déconnecter
+        </button>
+      </div>
+
+      <p v-if="connectionList.length === 0" class="empty">Aucun pair pour le moment.</p>
+      <ul v-else class="peer-list" data-testid="peer-list">
+        <li v-for="entry in connectionList" :key="entry.peerId">
+          <span class="peer-details">
+            <strong>{{ entry.peerId }}</strong>
+            <small>
+              {{ entry.state === "connected" ? "Connecté" : "Connexion…" }}
+              · {{ entry.direction === "incoming" ? "entrant" : "sortant" }}
+            </small>
+          </span>
+          <button
+            type="button"
+            class="secondary small"
+            :aria-label="`Déconnecter ${entry.peerId}`"
+            @click="disconnectPeer(entry.peerId)"
+          >
+            Déconnecter
+          </button>
+        </li>
+      </ul>
+    </section>
+
     <form class="row" @submit.prevent="sendMessage">
-      <label for="message">Votre message</label>
+      <label for="message">Votre message à tous les pairs connectés</label>
       <input id="message" v-model="message" autocomplete="off" placeholder="Bonjour !" />
-      <button type="submit" :disabled="!isConnected || !message.trim()">Envoyer</button>
+      <button type="submit" :disabled="!isConnected || !message.trim()">Envoyer à tous</button>
     </form>
 
     <section>
       <h2>Messages</h2>
       <p v-if="messages.length === 0" class="empty">Aucun message pour le moment.</p>
-      <ul v-else>
+      <ul v-else data-testid="messages">
         <li v-for="(item, index) in messages" :key="index">
           <strong>{{ item.from }}:</strong> {{ item.text }}
         </li>

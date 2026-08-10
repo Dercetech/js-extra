@@ -60,7 +60,7 @@ h2 {
 
 .row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
+  grid-template-columns: 1fr auto;
   gap: 8px;
   margin-top: 20px;
 }
@@ -95,6 +95,12 @@ button.secondary {
   background: #4b5563;
 }
 
+button.small {
+  min-height: 34px;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+}
+
 button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
@@ -113,6 +119,56 @@ li {
   color: #6b7280;
 }
 
+.section-heading {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 28px;
+}
+
+.section-heading h2 {
+  margin: 0;
+}
+
+.peer-list {
+  display: grid;
+  gap: 8px;
+  padding: 0;
+  list-style: none;
+}
+
+.peer-list li {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  background: #f9fafb;
+}
+
+.peer-details {
+  min-width: 0;
+}
+
+.peer-details strong,
+.peer-details small {
+  display: block;
+}
+
+.peer-details strong {
+  font-family: ui-monospace, monospace;
+  overflow-wrap: anywhere;
+}
+
+.peer-details small {
+  margin-top: 3px;
+  color: #6b7280;
+}
+
 @media (max-width: 560px) {
   main {
     margin: 16px auto;
@@ -126,5 +182,10 @@ li {
   .row input {
     grid-column: 1 / -1;
   }
-}
 
+  .section-heading,
+  .peer-list li {
+    align-items: stretch;
+    flex-direction: column;
+  }
+}
