@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Récapitulatif du jour 6 : refactoriser une application de notes en modules ES."
+    />
+    <title>Jour 6 Récap — Notes modulaires</title>
+    <link rel="stylesheet" href="./src/styles.css" />
+    <script type="module" src="./src/app.js"></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main-content">Aller au contenu</a>
+
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Jour 6 · Récap JavaScript</p>
+        <h1>Refactoriser l’application de notes en modules</h1>
+        <p class="subtitle">
+          Même comportement, responsabilités plus nettes, imports visibles dans DevTools.
+        </p>
+      </div>
+      <span id="variant-badge" class="variant-badge">Chargement…</span>
+    </header>
+
+    <main id="main-content" class="page-shell">
+      <p id="status" class="status" role="status" aria-live="polite">
+        Initialisation de l’application…
+      </p>
+
+      <section class="workspace" aria-label="Application de notes">
+        <section class="panel notes-panel" aria-labelledby="notes-heading">
+          <div class="panel-heading">
+            <div>
+              <p class="section-kicker">Collection</p>
+              <h2 id="notes-heading">Mes notes</h2>
+            </div>
+            <span id="notes-count" class="count-badge">0 note</span>
+          </div>
+
+          <div class="controls-grid">
+            <div>
+              <label for="search">Rechercher</label>
+              <input
+                id="search"
+                type="search"
+                autocomplete="off"
+                placeholder="Titre ou contenu"
+                aria-describedby="search-help"
+              />
+              <small id="search-help">Échap efface la recherche.</small>
+            </div>
+            <div>
+              <label for="filter">Filtrer</label>
+              <select id="filter">
+                <option value="all">Toutes</option>
+                <option value="pinned">Épinglées</option>
+                <option value="unpinned">Non épinglées</option>
+              </select>
+            </div>
+          </div>
+
+          <p id="empty-list" class="empty-message" hidden>
+            Aucune note ne correspond à ces critères.
+          </p>
+          <ul id="notes-list" class="notes-list" aria-label="Liste des notes"></ul>
+        </section>
+
+        <div class="editor-column">
+          <section class="panel" aria-labelledby="add-heading">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Créer</p>
+                <h2 id="add-heading">Nouvelle note</h2>
+              </div>
+              <span class="shortcut" aria-label="Raccourci Contrôle Entrée">Ctrl + Entrée</span>
+            </div>
+
+            <form id="add-form" class="stacked-form">
+              <label for="new-title">Titre</label>
+              <input id="new-title" name="title" type="text" maxlength="120" required />
+
+              <label for="new-content">Contenu</label>
+              <textarea id="new-content" name="content" rows="4" required></textarea>
+
+              <button type="submit">Ajouter la note</button>
+            </form>
+          </section>
+
+          <section class="panel" aria-labelledby="detail-heading">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Sélection</p>
+                <h2 id="detail-heading">Modifier la note</h2>
+              </div>
+              <span id="pin-indicator" class="pin-indicator" hidden>Épinglée</span>
+            </div>
+
+            <p id="no-selection" class="empty-message">
+              Sélectionnez une note pour la modifier.
+            </p>
+
+            <div id="note-editor" hidden>
+              <form id="edit-form" class="stacked-form">
+                <label for="edit-title">Titre</label>
+                <input id="edit-title" name="title" type="text" maxlength="120" required />
+
+                <label for="edit-content">Contenu</label>
+                <textarea id="edit-content" name="content" rows="5" required></textarea>
+
+                <div class="action-row">
+                  <button type="submit">Enregistrer</button>
+                  <button id="toggle-pin" class="secondary" type="button">Épingler</button>
+                  <button id="delete-note" class="danger" type="button">Supprimer</button>
+                </div>
+              </form>
+              <p id="note-dates" class="note-dates"></p>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="data-heading">
+            <div class="panel-heading">
+              <div>
+                <p class="section-kicker">Sauvegarde</p>
+                <h2 id="data-heading">Importer ou exporter</h2>
+              </div>
+            </div>
+            <p class="data-help">Le fichier exporté contient uniquement vos notes locales.</p>
+            <div class="action-row">
+              <button id="export-notes" class="secondary" type="button">Exporter en JSON</button>
+              <label class="file-button" for="import-notes">Importer un JSON</label>
+              <input
+                id="import-notes"
+                class="visually-hidden"
+                type="file"
+                accept="application/json,.json"
+              />
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="control-dashboard" aria-labelledby="dashboard-heading">
+        <div class="dashboard-heading">
+          <div>
+            <p class="section-kicker">DevTools</p>
+            <h2 id="dashboard-heading">Tableau de contrôle</h2>
+          </div>
+          <p id="architecture-summary" class="architecture-summary"></p>
+        </div>
+
+        <div class="dashboard-grid">
+          <article class="code-panel">
+            <h3>État précédent</h3>
+            <pre><code id="previous-state">—</code></pre>
+          </article>
+          <article class="code-panel">
+            <h3>État actuel</h3>
+            <pre><code id="current-state">—</code></pre>
+          </article>
+          <article class="log-panel">
+            <div class="log-heading">
+              <h3>Modules &amp; actions</h3>
+              <button id="clear-log" class="quiet" type="button">Vider</button>
+            </div>
+            <ol id="activity-log" class="activity-log" aria-live="polite"></ol>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <a href="https://training.dercetech.com/trainings/javascript-vanilla-devtools/day-6.html#recap">
+        Revenir au récapitulatif du jour 6
+      </a>
+    </footer>
+  </body>
+</html>
