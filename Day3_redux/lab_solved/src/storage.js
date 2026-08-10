@@ -1,7 +1,7 @@
-const NOTES_KEY = "day2_redux_notes";
-const VISITS_KEY = "day2_redux_visits";
-const SELECTED_ID_KEY = "day2_redux_selected_id";
-const LAST_NOTE_ID_KEY = "day2_redux_last_note_id";
+const NOTES_KEY = "day3_redux_notes";
+const VISITS_KEY = "day3_redux_visits";
+const SELECTED_ID_KEY = "day3_redux_selected_id";
+const LAST_NOTE_ID_KEY = "day3_redux_last_note_id";
 const MAX_SEQUENTIAL_NOTE_ID = 999_999_999;
 
 function asPositiveSafeInteger(value) {

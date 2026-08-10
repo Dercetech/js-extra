@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mini store de notes</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Jour 3 · Faire évoluer l’application</p>
+          <h1>Mini store de notes</h1>
+        </div>
+        <p class="visit-count">
+          Visites cette session : <span id="visit-count">0</span>
+        </p>
+      </header>
+
+      <div class="layout">
+        <aside class="panel notes-panel" aria-labelledby="notes-title">
+          <h2 id="notes-title">Notes</h2>
+          <p id="empty-list">Aucune note pour le moment.</p>
+          <ul id="notes-list" class="notes-list"></ul>
+        </aside>
+
+        <div class="right-column">
+          <section class="panel" aria-labelledby="details-title">
+            <h2 id="details-title">Détail de la note</h2>
+            <div id="note-details">
+              <p>Sélectionnez une note dans la liste.</p>
+            </div>
+          </section>
+
+          <section class="panel" aria-labelledby="add-title">
+            <h2 id="add-title">Ajouter une note</h2>
+            <form id="note-form">
+              <label for="note-title">Titre</label>
+              <input id="note-title" name="title" type="text" required />
+
+              <label for="note-content">Contenu</label>
+              <textarea
+                id="note-content"
+                name="content"
+                rows="6"
+                required
+              ></textarea>
+
+              <button type="submit">Ajouter la note</button>
+            </form>
+          </section>
+        </div>
+      </div>
+    </main>
+
+    <section class="state-inspector" aria-labelledby="state-inspector-title">
+      <div class="state-inspector-inner">
+        <div class="state-inspector-header">
+          <p class="state-inspector-eyebrow">Le store en direct</p>
+          <h2 id="state-inspector-title">Inspecteur d’état Redux</h2>
+          <p>
+            Comparez les deux instantanés après chaque action. Grâce à
+            l’immutabilité du reducer, l’état précédent reste intact.
+          </p>
+        </div>
+
+        <div class="state-grid">
+          <article class="state-panel">
+            <h3>État précédent</h3>
+            <pre><code id="previous-state"></code></pre>
+          </article>
+
+          <article class="state-panel">
+            <h3>État actuel</h3>
+            <pre><code id="current-state"></code></pre>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <script type="module" src="/src/app.js"></script>
+  </body>
+</html>
