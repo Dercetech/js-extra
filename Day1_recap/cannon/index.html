@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Day 1 Recap – Canon</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #1a1a1a; color: #eee; font-family: system-ui, sans-serif; }
+    #ui {
+      position: absolute; top: 12px; left: 12px; z-index: 10;
+      background: rgba(0,0,0,0.75); padding: 12px 16px; border-radius: 8px;
+      font-size: 14px; line-height: 1.5; max-width: 360px;
+    }
+    #ui strong { color: #7dd3fc; }
+    #shot-settings {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+      margin-top: 10px;
+    }
+    #shot-settings > div { padding: 6px 8px; border-radius: 4px; background: #1e293b; }
+    #shot-settings label { display: block; color: #cbd5e1; font-size: 12px; }
+    #shot-settings output { color: #fef08a; font-weight: 700; font-variant-numeric: tabular-nums; }
+    button {
+      margin-top: 8px; margin-right: 8px; padding: 8px 14px;
+      font-size: 14px; cursor: pointer; border: none; border-radius: 4px;
+      background: #0ea5e9; color: white;
+    }
+    button:hover { background: #0284c7; }
+    #game-container { width: 100vw; height: 100vh; }
+  </style>
+</head>
+<body>
+  <div id="ui">
+    <div><strong>Day 1 Recap – Canon</strong></div>
+    <div>Répare les bugs dans <code>src/student.js</code>.</div>
+    <div>Ensuite tire 10 fois avec une boucle.</div>
+    <div>Ajuste power / angle / wind pour toucher.</div>
+    <div id="shot-settings" aria-live="polite" aria-atomic="true">
+      <div><label for="power-value">Puissance</label><output id="power-value">—</output></div>
+      <div><label for="angle-value">Angle</label><output id="angle-value">—</output></div>
+      <div><label for="wind-value">Vent</label><output id="wind-value">—</output></div>
+    </div>
+    <button id="btn-fire">Tirer une fois</button>
+    <button id="btn-barrage">Barrage (×10)</button>
+  </div>
+  <div id="game-container"></div>
+
+  <script src="https://cdn.jsdelivr.net/npm/phaser@3.80.1/dist/phaser.min.js"></script>
+  <script type="module" src="/src/engine.js"></script>
+  <script type="module" src="/src/student.js"></script>
+</body>
+</html>
