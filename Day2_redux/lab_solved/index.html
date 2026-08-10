@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Notes Redux sans bibliothèque</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script type="module" src="/src/app.js"></script>
+  </head>
+  <body>
+    <header class="page-header">
+      <div>
+        <p class="eyebrow">Jour 2 · État et persistance</p>
+        <h1>Notes Redux sans bibliothèque</h1>
+      </div>
+      <p id="visit-count" class="visit-count">Visites cette session : 0</p>
+    </header>
+
+    <main class="app-layout">
+      <section class="panel notes-panel" aria-labelledby="notes-heading">
+        <div class="panel-heading">
+          <div>
+            <h2 id="notes-heading">Notes</h2>
+            <p class="counts">
+              <span id="total-count">0 notes</span>
+              <span aria-hidden="true">·</span>
+              <span id="pinned-count">0 notes épinglées</span>
+            </p>
+          </div>
+        </div>
+
+        <div class="controls">
+          <label for="search">Rechercher par titre</label>
+          <input id="search" type="search" autocomplete="off" placeholder="Ex. : réunion" />
+
+          <label for="filter">Afficher</label>
+          <select id="filter">
+            <option value="all">Toutes les notes</option>
+            <option value="pinned">Seulement les notes épinglées</option>
+          </select>
+        </div>
+
+        <ul id="notes-list" class="notes-list" aria-label="Liste des notes"></ul>
+      </section>
+
+      <div class="right-column">
+        <section class="panel details-panel" aria-labelledby="details-heading">
+          <h2 id="details-heading">Détail de la note</h2>
+          <p id="no-selection" class="empty-message">Sélectionnez une note dans la liste.</p>
+
+          <article id="note-details" hidden>
+            <div class="detail-heading">
+              <h3 id="detail-title"></h3>
+              <span id="pin-status" class="pin-status"></span>
+            </div>
+
+            <p id="detail-content" class="note-content"></p>
+
+            <dl class="dates">
+              <div>
+                <dt>Créée</dt>
+                <dd id="created-at"></dd>
+              </div>
+              <div>
+                <dt>Modifiée</dt>
+                <dd id="updated-at"></dd>
+              </div>
+            </dl>
+
+            <div class="action-row">
+              <button id="toggle-pin" type="button" class="secondary">Épingler</button>
+              <button id="delete-note" type="button" class="danger">Supprimer</button>
+            </div>
+
+            <form id="edit-form" class="stacked-form">
+              <h3>Modifier la note</h3>
+
+              <label for="edit-title">Titre</label>
+              <input id="edit-title" name="title" type="text" maxlength="120" required />
+
+              <label for="edit-content">Contenu</label>
+              <textarea id="edit-content" name="content" rows="5" required></textarea>
+
+              <button type="submit">Enregistrer les modifications</button>
+            </form>
+          </article>
+        </section>
+
+        <section class="panel" aria-labelledby="add-heading">
+          <h2 id="add-heading">Ajouter une note</h2>
+          <form id="add-form" class="stacked-form">
+            <label for="new-title">Titre</label>
+            <input id="new-title" name="title" type="text" maxlength="120" required />
+
+            <label for="new-content">Contenu</label>
+            <textarea id="new-content" name="content" rows="5" required></textarea>
+
+            <button type="submit">Ajouter la note</button>
+          </form>
+        </section>
+
+        <section class="panel" aria-labelledby="data-heading">
+          <h2 id="data-heading">Données</h2>
+          <div class="data-actions">
+            <button id="export-notes" type="button" class="secondary">Exporter en JSON</button>
+            <label class="file-button" for="import-notes">Importer un fichier JSON</label>
+            <input id="import-notes" class="visually-hidden" type="file" accept="application/json,.json" />
+            <button id="clear-notes" type="button" class="danger">Supprimer toutes les notes</button>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <section class="state-inspector" aria-labelledby="state-inspector-heading">
+      <div class="state-inspector-content">
+        <h2 id="state-inspector-heading">Inspecteur du store Redux</h2>
+        <p class="state-inspector-copy">
+          Comparez l’état produit par la dernière action avec l’état qui existait juste avant le dispatch.
+        </p>
+
+        <div class="state-inspector-panels">
+          <article class="state-inspector-panel">
+            <h3>État précédent</h3>
+            <pre><code id="previous-state"></code></pre>
+          </article>
+
+          <article class="state-inspector-panel">
+            <h3>État actuel</h3>
+            <pre><code id="current-state"></code></pre>
+          </article>
+        </div>
+      </div>
+    </section>
+  </body>
+</html>
